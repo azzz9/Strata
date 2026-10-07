@@ -10788,6 +10788,20 @@ int main(int argc, char** argv) {
                          prompt_ms > 0 ? 1000.0 * read_n / prompt_ms : 0.0, (long long) produced_n, decode_ms,
                          decode_ms > 0 ? 1000.0 * produced_n / decode_ms : 0.0, (long long) draft_accepted,
                          (long long) draft_offered, checks.size(), cancelled ? " (cancelled)" : "");
+            // The batched read's own figures.  The one-shot path prints these at the end of `strata generate`,
+            // and serve did not, so a read that takes 2.5 s in one request and 3.5 s in the next could not say
+            // where the second went.  `ms_experts_host` is the host's share of staging the non-resident experts
+            // and `ms_ple` the PLE block; what is left of `ms_total` is the GPU's own work on the chunk.
+            if (std::getenv("STRATA_TRACE")) {
+                const strata::prefill::PrefillStats& ps = sp.stats();
+                std::fprintf(stderr, "strata trace: prompt stats: %lld chunks, %.1f ms total (%.1f tok/s), host "
+                                     "staging %.1f ms, PLE %.1f ms; experts %lld streamed (%lld by DMA, %lld "
+                                     "resident, %lld on the CPU)\n",
+                             (long long) ps.chunks, ps.ms_total,
+                             ps.ms_total > 0 ? 1000.0 * (double) ps.tokens / ps.ms_total : 0.0, ps.ms_experts_host,
+                             ps.ms_ple, (long long) ps.experts_streamed, (long long) ps.experts_dma,
+                             (long long) ps.experts_resident, (long long) ps.experts_cpu);
+            }
             // the VRAM share of the experts the pool looked up while decoding; experts it sent over PCIe for the GPU
             // to read (--pcie-frac) are in neither count - #588: so that share is said beside it (raising --pcie-frac
             // raises the hit rate while the PCIe reads may make the decode slower)
